@@ -105,6 +105,31 @@ class _ChatWidgetState extends State<ChatWidget> {
                     ],
                   ),
           ),
+          if (images.isNotEmpty)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                ...List.generate(
+                    images.length,
+                    (index) => SizedBox(
+                          height: 60,
+                          width: 60,
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: GestureDetector(
+                              onTap: () {
+                                images.removeAt(index);
+                                setState(() {});
+                              },
+                              child: Image.file(
+                                File(images[index].path),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ))
+              ],
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(
               vertical: 25,
@@ -156,12 +181,16 @@ class _ChatWidgetState extends State<ChatWidget> {
   XFile? pickedFile;
 
   onTapImage() async {
-    pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
-    print(pickedFile?.path);
-    if (pickedFile != null) {
-      images.add(pickedFile!);
-      print("file added");
-      // _sendChatMessageWithImage(_textController.text);
+    if (images.length < 2) {
+      pickedFile = await ImagePicker()
+          .pickImage(source: ImageSource.gallery, imageQuality: 50);
+
+      if (pickedFile != null) {
+        setState(() {
+          images.add(pickedFile!);
+        });
+        // _sendChatMessageWithImage(_textController.text);
+      }
     }
   }
 
@@ -170,56 +199,46 @@ class _ChatWidgetState extends State<ChatWidget> {
   }
 
   _sendChatMessageWithImage(String message) async {
-    setState(() {
-      _loading = true;
-    });
-    if (images.isEmpty) {
-      _loading = false;
-      return;
-    }
-    final firstImage = await _getImageBytes(File(images[0].path));
-    final secondImage = await _getImageBytes(File(images[1].path));
-    setState(() {
-      chatResponses.add(ImageChatModel(
-          text: message, imagePaths: images.map((e) => e.path).toList()));
-    });
-    final prompt = TextPart(message);
-    // final firstImage = await _getImageBytes(File(pickedFile!.path));
-    final imageParts = [
-      DataPart('image/jpeg', firstImage),
-      DataPart('image/jpeg', secondImage),
-    ];
-
-    final responses = await _model.generateContent([
-      Content.multi([prompt, ...imageParts])
-    ]);
-    var text = responses.text;
-    setState(() {
-      chatResponses.add(ImageChatModel(text: text ?? "No response from API."));
-    });
-
-    if (text == null) {
-      _showError('No response from API.');
-      return;
-    } else {
-      setState(() {
-        _loading = false;
-        _scrollDown();
-        images.clear();
-      });
-    }
-  }
-
-  Future<void> _sendChatMessage(String message) async {
-    setState(() {
-      _loading = true;
-    });
-
     try {
-      var response = await _chat.sendMessage(
-        Content.text(message),
-      );
-      var text = response.text;
+      if (message.isEmpty) {
+        return;
+      }
+      setState(() {
+        _loading = true;
+      });
+      if (images.isEmpty) {
+        _loading = false;
+        return;
+      }
+      // var listOfImageBytes = [];
+      var imageParts = [];
+      for (var image in images) {
+        await _getImageBytes(File(image.path));
+        imageParts.add(
+            DataPart('image/jpeg', await _getImageBytes(File(image.path))));
+      }
+      // final firstImage = await _getImageBytes(File(images[0].path));
+      // final secondImage = await _getImageBytes(File(images[1].path));
+      setState(() {
+        chatResponses.add(ImageChatModel(
+            text: message, imagePaths: images.map((e) => e.path).toList()));
+      });
+      final prompt = TextPart(message);
+      // final firstImage = await _getImageBytes(File(pickedFile!.path));
+      // final imageParts = [
+      //   DataPart('image/jpeg', firstImage),
+      //   DataPart('image/jpeg', secondImage),
+      // ];
+
+      final responses = await _model.generateContent([
+        Content.multi([prompt, ...imageParts])
+      ]);
+      var text = responses.text;
+      setState(() {
+        chatResponses
+            .add(ImageChatModel(text: text ?? "No response from API."));
+        _scrollDown();
+      });
 
       if (text == null) {
         _showError('No response from API.');
@@ -228,6 +247,7 @@ class _ChatWidgetState extends State<ChatWidget> {
         setState(() {
           _loading = false;
           _scrollDown();
+          images.clear();
         });
       }
     } catch (e) {
@@ -243,6 +263,40 @@ class _ChatWidgetState extends State<ChatWidget> {
       _textFieldFocus.requestFocus();
     }
   }
+
+  // Future<void> _sendChatMessage(String message) async {
+  //   setState(() {
+  //     _loading = true;
+  //   });
+
+  //   try {
+  //     var response = await _chat.sendMessage(
+  //       Content.text(message),
+  //     );
+  //     var text = response.text;
+  //
+  //     if (text == null) {
+  //       _showError('No response from API.');
+  //       return;
+  //     } else {
+  //       setState(() {
+  //         _loading = false;
+  //         _scrollDown();
+  //       });
+  //     }
+  //   } catch (e) {
+  //     _showError(e.toString());
+  //     setState(() {
+  //       _loading = false;
+  //     });
+  //   } finally {
+  //     _textController.clear();
+  //     setState(() {
+  //       _loading = false;
+  //     });
+  //     _textFieldFocus.requestFocus();
+  //   }
+  // }
 
   void _showError(String message) {
     showDialog(

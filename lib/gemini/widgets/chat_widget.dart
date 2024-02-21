@@ -17,8 +17,8 @@ class ChatWidget extends StatefulWidget {
 }
 
 class _ChatWidgetState extends State<ChatWidget> {
-  late final GenerativeModel _model;
-  late final ChatSession _chat;
+  GenerativeModel? _model;
+  ChatSession? _chat;
 
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
@@ -31,12 +31,12 @@ class _ChatWidgetState extends State<ChatWidget> {
   @override
   void initState() {
     super.initState();
-    _model = GenerativeModel(
-      // model: 'gemini-pro',
-      model: 'gemini-pro-vision',
-      apiKey: _apiKey!,
-    );
-    _chat = _model.startChat();
+    // _model = GenerativeModel(
+    //   // model: 'gemini-pro',
+    //   model: 'gemini-pro-vision',
+    //   apiKey: _apiKey!,
+    // );
+    // _chat = _model.startChat();
   }
 
   void _scrollDown() {
@@ -206,10 +206,16 @@ class _ChatWidgetState extends State<ChatWidget> {
       setState(() {
         _loading = true;
       });
+      setState(() {
+        chatResponses.add(ImageChatModel(
+            text: message, imagePaths: images.map((e) => e.path).toList()));
+      });
       if (images.isEmpty) {
-        _loading = false;
+        _sendChatMessage(message);
+        // _loading = false;
         return;
       }
+      setModel('gemini-pro-vision');
       // var listOfImageBytes = [];
       var imageParts = [];
       for (var image in images) {
@@ -219,10 +225,7 @@ class _ChatWidgetState extends State<ChatWidget> {
       }
       // final firstImage = await _getImageBytes(File(images[0].path));
       // final secondImage = await _getImageBytes(File(images[1].path));
-      setState(() {
-        chatResponses.add(ImageChatModel(
-            text: message, imagePaths: images.map((e) => e.path).toList()));
-      });
+
       final prompt = TextPart(message);
       // final firstImage = await _getImageBytes(File(pickedFile!.path));
       // final imageParts = [
@@ -230,10 +233,10 @@ class _ChatWidgetState extends State<ChatWidget> {
       //   DataPart('image/jpeg', secondImage),
       // ];
 
-      final responses = await _model.generateContent([
+      final responses = await _model?.generateContent([
         Content.multi([prompt, ...imageParts])
       ]);
-      var text = responses.text;
+      var text = responses?.text;
       setState(() {
         chatResponses
             .add(ImageChatModel(text: text ?? "No response from API."));
@@ -264,39 +267,53 @@ class _ChatWidgetState extends State<ChatWidget> {
     }
   }
 
-  // Future<void> _sendChatMessage(String message) async {
-  //   setState(() {
-  //     _loading = true;
-  //   });
+  Future<void> _sendChatMessage(String message) async {
+    setModel("gemini-pro");
+    setState(() {
+      _loading = true;
+    });
 
-  //   try {
-  //     var response = await _chat.sendMessage(
-  //       Content.text(message),
-  //     );
-  //     var text = response.text;
-  //
-  //     if (text == null) {
-  //       _showError('No response from API.');
-  //       return;
-  //     } else {
-  //       setState(() {
-  //         _loading = false;
-  //         _scrollDown();
-  //       });
-  //     }
-  //   } catch (e) {
-  //     _showError(e.toString());
-  //     setState(() {
-  //       _loading = false;
-  //     });
-  //   } finally {
-  //     _textController.clear();
-  //     setState(() {
-  //       _loading = false;
-  //     });
-  //     _textFieldFocus.requestFocus();
-  //   }
-  // }
+    try {
+      var response = await _chat?.sendMessage(
+        Content.text(message),
+      );
+      var text = response?.text;
+
+      if (text == null) {
+        _showError('No response from API.');
+        return;
+      } else {
+        setState(() {
+          chatResponses
+              .add(ImageChatModel(text: text ?? "No response from API."));
+          _loading = false;
+          _scrollDown();
+        });
+      }
+    } catch (e) {
+      _showError(e.toString());
+      setState(() {
+        _loading = false;
+      });
+    } finally {
+      _textController.clear();
+      setState(() {
+        // _loading = false;
+      });
+      _textFieldFocus.requestFocus();
+    }
+  }
+
+  setModel(String model) {
+    _model = GenerativeModel(
+      model: model,
+      // model: 'gemini-pro-vision',
+      apiKey: _apiKey!,
+    );
+    if (_model != null) {
+      _chat = _model!.startChat();
+    }
+  }
 
   void _showError(String message) {
     showDialog(

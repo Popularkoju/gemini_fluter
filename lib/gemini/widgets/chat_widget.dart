@@ -17,8 +17,9 @@ class ChatWidget extends StatefulWidget {
 }
 
 class _ChatWidgetState extends State<ChatWidget> {
-  GenerativeModel? _model;
-  ChatSession? _chat;
+  late final GenerativeModel _modelImage;
+  late final GenerativeModel _modelChat;
+  late final ChatSession _chat;
 
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
@@ -31,12 +32,16 @@ class _ChatWidgetState extends State<ChatWidget> {
   @override
   void initState() {
     super.initState();
-    // _model = GenerativeModel(
-    //   // model: 'gemini-pro',
-    //   model: 'gemini-pro-vision',
-    //   apiKey: _apiKey!,
-    // );
-    // _chat = _model.startChat();
+    _modelImage = GenerativeModel(
+      // model: 'gemini-pro',
+      model: 'gemini-pro-vision',
+      apiKey: _apiKey!,
+    );
+    _modelChat = GenerativeModel(
+      model: 'gemini-pro',
+      apiKey: _apiKey!,
+    );
+    _chat = _modelChat.startChat();
   }
 
   void _scrollDown() {
@@ -149,8 +154,7 @@ class _ChatWidgetState extends State<ChatWidget> {
                     decoration: textFieldDecoration,
                     controller: _textController,
                     onSubmitted: (String value) {
-                      // _sendChatMessage(value);
-                      _sendChatMessageWithImage(value);
+                      _sendMessage(value);
                     },
                   ),
                 ),
@@ -161,7 +165,7 @@ class _ChatWidgetState extends State<ChatWidget> {
                   IconButton(
                     onPressed: () async {
                       // _sendChatMessage(_textController.text);
-                      _sendChatMessageWithImage(_textController.text);
+                      _sendMessage(_textController.text);
                     },
                     icon: Icon(
                       Icons.send,
@@ -198,24 +202,27 @@ class _ChatWidgetState extends State<ChatWidget> {
     return file.readAsBytes();
   }
 
+  _sendMessage(String message) {
+    if (message.isEmpty) {
+      return;
+    }
+    setState(() {
+      chatResponses.add(ImageChatModel(
+          text: message, imagePaths: images.map((e) => e.path).toList()));
+    });
+    if (images.isEmpty) {
+      _sendChatMessage(message);
+    } else {
+      _sendChatMessageWithImage(message);
+    }
+  }
+
   _sendChatMessageWithImage(String message) async {
     try {
-      if (message.isEmpty) {
-        return;
-      }
       setState(() {
         _loading = true;
       });
-      setState(() {
-        chatResponses.add(ImageChatModel(
-            text: message, imagePaths: images.map((e) => e.path).toList()));
-      });
-      if (images.isEmpty) {
-        _sendChatMessage(message);
-        // _loading = false;
-        return;
-      }
-      setModel('gemini-pro-vision');
+
       // var listOfImageBytes = [];
       var imageParts = [];
       for (var image in images) {
@@ -233,14 +240,14 @@ class _ChatWidgetState extends State<ChatWidget> {
       //   DataPart('image/jpeg', secondImage),
       // ];
 
-      final responses = await _model?.generateContent([
+      final responses = await _modelImage.generateContent([
         Content.multi([prompt, ...imageParts])
       ]);
-      var text = responses?.text;
+      var text = responses.text;
       setState(() {
         chatResponses
             .add(ImageChatModel(text: text ?? "No response from API."));
-        _scrollDown();
+        // _scrollDown();
       });
 
       if (text == null) {
@@ -268,7 +275,6 @@ class _ChatWidgetState extends State<ChatWidget> {
   }
 
   Future<void> _sendChatMessage(String message) async {
-    setModel("gemini-pro");
     setState(() {
       _loading = true;
     });
@@ -284,8 +290,7 @@ class _ChatWidgetState extends State<ChatWidget> {
         return;
       } else {
         setState(() {
-          chatResponses
-              .add(ImageChatModel(text: text ?? "No response from API."));
+          chatResponses.add(ImageChatModel(text: text));
           _loading = false;
           _scrollDown();
         });
@@ -301,17 +306,6 @@ class _ChatWidgetState extends State<ChatWidget> {
         // _loading = false;
       });
       _textFieldFocus.requestFocus();
-    }
-  }
-
-  setModel(String model) {
-    _model = GenerativeModel(
-      model: model,
-      // model: 'gemini-pro-vision',
-      apiKey: _apiKey!,
-    );
-    if (_model != null) {
-      _chat = _model!.startChat();
     }
   }
 
